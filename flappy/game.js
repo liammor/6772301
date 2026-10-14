@@ -27,14 +27,47 @@ const MEDALS = [
 ];
 const MUTE_BTN = { x: W - 46, y: 12, w: 34, h: 34 };
 
+// Difficulty only changes how fast the whole game runs
+const DIFFICULTIES = {
+  easy: { label: 'EASY', speed: 0.8 },
+  normal: { label: 'NORMAL', speed: 1 },
+  hard: { label: 'HARD', speed: 1.25 },
+};
+const DIFF_BTNS = Object.keys(DIFFICULTIES).map((key, i) => ({
+  key, x: 40 + i * 110, y: 448, w: 100, h: 36,
+}));
+
 let bird, pipes, score, state; // state: 'ready' | 'playing' | 'paused' | 'over'
 let distSincePipe, lastTop, overTimer;
+let difficulty = 'normal';
 let highScore = 0;
 let muted = false;
 try {
-  highScore = parseInt(localStorage.getItem('flappyHighScore'), 10) || 0;
+  const saved = localStorage.getItem('flappyDifficulty');
+  if (saved in DIFFICULTIES) difficulty = saved;
   muted = localStorage.getItem('flappyMuted') === '1';
 } catch (e) {}
+loadHighScore();
+
+// Each difficulty keeps its own best score ('normal' keeps the original key)
+function highScoreKey() {
+  return difficulty === 'normal' ? 'flappyHighScore' : `flappyHighScore-${difficulty}`;
+}
+
+function loadHighScore() {
+  highScore = 0;
+  try {
+    highScore = parseInt(localStorage.getItem(highScoreKey()), 10) || 0;
+  } catch (e) {}
+}
+
+function setDifficulty(key) {
+  difficulty = key;
+  loadHighScore();
+  try {
+    localStorage.setItem('flappyDifficulty', key);
+  } catch (e) {}
+}
 
 // Scenery
 let groundX = 0;
@@ -188,7 +221,7 @@ function gameOver() {
   if (score > highScore) {
     highScore = score;
     try {
-      localStorage.setItem('flappyHighScore', highScore);
+      localStorage.setItem(highScoreKey(), highScore);
     } catch (e) {}
   }
 }
@@ -492,6 +525,21 @@ function drawMuteButton() {
   ctx.lineCap = 'butt';
 }
 
+function drawDifficultyButtons() {
+  for (const b of DIFF_BTNS) {
+    const selected = b.key === difficulty;
+    ctx.fillStyle = selected ? '#ffd54a' : 'rgba(0,0,0,0.25)';
+    ctx.strokeStyle = selected ? '#533' : 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, b.w, b.h, 10);
+    ctx.fill();
+    ctx.stroke();
+    text(DIFFICULTIES[b.key].label, b.x + b.w / 2, b.y + 25, 17, selected ? '#fff' : '#ddd');
+  }
+  text('1 / 2 / 3 or click to change speed', W / 2, 505, 13);
+}
+
 function draw() {
   ctx.save();
   if (shake > 0.5) {
@@ -510,7 +558,8 @@ function draw() {
     text('Flappy Bird', W / 2, 160, 46, '#ffd54a');
     text('Press Space or click', W / 2, H / 2 + 70, 22);
     text(`Best: ${highScore}`, W / 2, H / 2 + 100, 20);
-    text('P: pause   M: mute', W / 2, H / 2 + 130, 15);
+    text('P: pause   M: mute', W / 2, H / 2 + 125, 15);
+    drawDifficultyButtons();
   } else if (state === 'paused') {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect(0, 0, W, H);
@@ -519,6 +568,7 @@ function draw() {
   } else if (state === 'over') {
     const medal = MEDALS.find(m => score >= m.score);
     text('Game Over', W / 2, 150, 48, '#ff7043');
+    text(`${DIFFICULTIES[difficulty].label} MODE`, W / 2, 178, 16);
     panel(W / 2 - 140, 190, 280, 125);
     ctx.fillStyle = '#e8502f';
     ctx.font = 'bold 16px "Trebuchet MS", Verdana, sans-serif';
@@ -546,7 +596,8 @@ function draw() {
   }
 }
 
-// Fixed-step loop: the game runs at the same speed on 60Hz and 144Hz screens
+// Fixed-step loop: the game runs at the same speed on 60Hz and 144Hz screens.
+// Difficulty scales the number of steps per second, so everything speeds up together.
 let lastTime = null;
 let acc = 0;
 
@@ -554,9 +605,10 @@ function loop(now) {
   if (lastTime === null) lastTime = now;
   acc += Math.min(now - lastTime, 250); // cap catch-up after a long stall
   lastTime = now;
-  while (acc >= STEP) {
+  const step = STEP / DIFFICULTIES[difficulty].speed;
+  while (acc >= step) {
     update();
-    acc -= STEP;
+    acc -= step;
   }
   draw();
   requestAnimationFrame(loop);
@@ -571,11 +623,16 @@ function canvasPoint(clientX, clientY) {
   };
 }
 
+function inside(p, b) {
+  return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+}
+
 function onPointer(clientX, clientY) {
   unlockAudio();
   const p = canvasPoint(clientX, clientY);
-  const b = MUTE_BTN;
-  if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) toggleMute();
+  const diffBtn = state === 'ready' && DIFF_BTNS.find(b => inside(p, b));
+  if (inside(p, MUTE_BTN)) toggleMute();
+  else if (diffBtn) setDifficulty(diffBtn.key);
   else flap();
 }
 
@@ -588,6 +645,8 @@ document.addEventListener('keydown', e => {
     togglePause();
   } else if (e.code === 'KeyM' && !e.repeat) {
     toggleMute();
+  } else if (state === 'ready' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
+    setDifficulty(DIFF_BTNS[Number(e.code.slice(-1)) - 1].key);
   }
 });
 canvas.addEventListener('mousedown', e => onPointer(e.clientX, e.clientY));
