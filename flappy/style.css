@@ -1,18 +1,25 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: radial-gradient(circle at center, #2b3a4a, #11181f);
+}
+
+body {
+  background: radial-gradient(ellipse at top, #34495e 0%, #1a2330 55%, #0e141b 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
+/* Fixed 2:3 shape; game.js matches the canvas pixels to this size */
 canvas {
-  background: #70c5ce;
-  max-height: 96vh;
-  max-width: 100vw;
+  display: block;
+  height: min(calc(96vh - 8px), calc(150vw - 12px));
+  aspect-ratio: 2 / 3;
+  background: #4ec0ca;
   border: 4px solid #533;
-  border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  border-radius: 14px;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.6);
   cursor: pointer;
+  touch-action: none;
 }
